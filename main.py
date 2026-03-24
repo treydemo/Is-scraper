@@ -2,6 +2,7 @@ import os
 import re
 import json
 import httpx
+from collections import Counter
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -10,7 +11,7 @@ from bs4 import BeautifulSoup
 from audit import run_audit
 from pdf_generator import generate_pdf_base64
 
-app = FastAPI(title="IA Website Intelligence Engine", version="1.0.0")
+app = FastAPI(title="IA Website Intelligence Engine", version="2.0.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -19,9 +20,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ─────────────────────────────────────────
-# REQUEST MODEL
-# ─────────────────────────────────────────
 class AuditRequest(BaseModel):
     url: str
     business_name: str = ""
@@ -29,26 +27,139 @@ class AuditRequest(BaseModel):
     challenge: str = ""
 
 # ─────────────────────────────────────────
-# URL NORMALIZER — feral-proof
+# URL NORMALIZER
 # ─────────────────────────────────────────
 def normalize_url(raw: str) -> str:
     url = raw.strip().lower()
-    url = re.sub(r'\s+', '', url)          # kill all whitespace
+    url = re.sub(r'\s+', '', url)
     if not url.startswith("http"):
         url = "https://" + url
     parsed = urlparse(url)
-    # Force https
     normalized = urlunparse(parsed._replace(scheme="https"))
-    # Strip trailing slash
     return normalized.rstrip("/")
+
+# ─────────────────────────────────────────
+# BRAND COLOR EXTRACTOR
+# ─────────────────────────────────────────
+def extract_brand_colors(html: str, soup: BeautifulSoup) -> dict:
+    hex_pattern = re.compile(r'#([0-9A-Fa-f]{6}|[0-9A-Fa-f]{3})\b')
+    style_tags = soup.find_all("style")
+    inline_styles = [tag.get("style", "") for tag in soup.find_all(style=True)]
+    all_css = " ".join([s.get_text() for s in style_tags]) + " ".join(inline_styles)
+
+    hex_colors = hex_pattern.findall(all_css)
+    normalized_hex = []
+    for h in hex_colors:
+        if len(h) == 3:
+            h = h[0]*2 + h[1]*2 + h[2]*2
+        r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+        # Filter near-white, near-black, and pure grays
+        if max(r,g,b) < 30 or min(r,g,b) > 225:
+            continue
+        if abs(r-g) < 20 and abs(g-b) < 20 and abs(r-b) < 20:
+            continue
+        normalized_hex.append(f"#{h.upper()}")
+
+    color_counts = Counter(normalized_hex)
+    top_colors = [c for c, _ in color_counts.most_common(5)]
+
+    return {
+        "primary": top_colors[0] if top_colors else "#1a1a2e",
+        "secondary": top_colors[1] if len(top_colors) > 1 else "#00d4ff",
+        "palette": top_colors[:5]
+    }
+
+# ─────────────────────────────────────────
+# LOGO EXTRACTOR
+# ─────────────────────────────────────────
+def extract_logo(soup: BeautifulSoup, base_url: str) -> str:
+    og_image = soup.find("meta", property="og:image")
+    if og_image and og_image.get("content"):
+        return og_image["content"]
+
+    for attr in [{"class": re.compile(r"logo", re.I)}, {"id": re.compile(r"logo", re.I)}, {"alt": re.compile(r"logo", re.I)}]:
+        candidates = soup.find_all("img", attrs=attr)
+        if candidates:
+            src = candidates[0].get("src", "")
+            if src.startswith("http"):
+                return src
+            elif src.startswith("/"):
+                return base_url + src
+
+    header = soup.find("header")
+    if header:
+        img = header.find("img")
+        if img:
+            src = img.get("src", "")
+            if src.startswith("http"):
+                return src
+            elif src.startswith("/"):
+                return base_url + src
+
+    return ""
+
+# ─────────────────────────────────────────
+# BRAND IDENTITY EXTRACTOR
+# ─────────────────────────────────────────
+def extract_brand_identity(soup: BeautifulSoup, body_text: str) -> dict:
+    # Tagline from H1
+    h1s = [h.get_text(strip=True) for h in soup.find_all("h1")]
+    tagline = h1s[0][:200] if h1s else ""
+
+    # Mission
+    mission = ""
+    for pattern in [
+        r'our mission[:\s]+([^.!?]{20,200}[.!?])',
+        r'mission[:\s]+([^.!?]{20,200}[.!?])',
+        r'we (help|exist to|are dedicated to|believe)[^.!?]{10,200}[.!?]',
+    ]:
+        match = re.search(pattern, body_text, re.IGNORECASE)
+        if match:
+            mission = match.group(0).strip()[:300]
+            break
+
+    # Leadership
+    leadership = []
+    for pattern in [
+        r'([A-Z][a-z]+ [A-Z][a-z]+)[,\s]+(?:CEO|CTO|COO|Founder|President|Director|Owner)',
+        r'(?:CEO|CTO|COO|Founder|President|Director|Owner)[,\s]+([A-Z][a-z]+ [A-Z][a-z]+)',
+    ]:
+        for m in re.findall(pattern, body_text)[:3]:
+            if m not in leadership:
+                leadership.append(m)
+
+    # Founded year
+    founded = ""
+    year_match = re.search(r'(?:founded|established|since|started)[^0-9]*(\d{4})', body_text, re.IGNORECASE)
+    if year_match:
+        year = int(year_match.group(1))
+        if 1900 < year < 2030:
+            founded = str(year)
+
+    # Location
+    location = ""
+    for pattern in [
+        r'(?:located|based|headquartered)[^.]*(?:in|at)\s+([A-Z][a-zA-Z\s,]+(?:TX|CA|NY|FL|IL|WA|GA|NC|OH|PA|AZ|CO|MA|VA|TN|MI|MN))',
+        r'([A-Z][a-zA-Z]+,\s*(?:TX|CA|NY|FL|IL|WA|GA|NC|OH|PA|AZ|CO))',
+    ]:
+        match = re.search(pattern, body_text, re.IGNORECASE)
+        if match:
+            location = match.group(1).strip()[:100]
+            break
+
+    return {
+        "tagline": tagline,
+        "mission": mission,
+        "leadership": leadership,
+        "founded": founded,
+        "location": location,
+    }
 
 # ─────────────────────────────────────────
 # SCRAPER
 # ─────────────────────────────────────────
 async def scrape_website(url: str) -> dict:
-    headers = {
-        "User-Agent": "Mozilla/5.0 (compatible; IAIntelligenceBot/1.0)"
-    }
+    headers = {"User-Agent": "Mozilla/5.0 (compatible; IAIntelligenceBot/1.0)"}
 
     async with httpx.AsyncClient(timeout=20, follow_redirects=True) as client:
         try:
@@ -60,14 +171,12 @@ async def scrape_website(url: str) -> dict:
 
     soup = BeautifulSoup(html, "html.parser")
 
-    # ── META & TITLE ──
     title = soup.title.string.strip() if soup.title else ""
     meta_desc_tag = soup.find("meta", attrs={"name": "description"})
     meta_desc = meta_desc_tag["content"].strip() if meta_desc_tag else ""
     meta_keywords_tag = soup.find("meta", attrs={"name": "keywords"})
     meta_keywords = meta_keywords_tag["content"].strip() if meta_keywords_tag else ""
 
-    # ── OG TAGS ──
     og_title = ""
     og_desc = ""
     og_tag = soup.find("meta", property="og:title")
@@ -77,28 +186,29 @@ async def scrape_website(url: str) -> dict:
     if og_dtag:
         og_desc = og_dtag.get("content", "")
 
-    # ── HEADINGS ──
     h1s = [h.get_text(strip=True) for h in soup.find_all("h1")]
     h2s = [h.get_text(strip=True) for h in soup.find_all("h2")][:10]
     h3s = [h.get_text(strip=True) for h in soup.find_all("h3")][:10]
 
-    # ── BODY TEXT ──
+    # Extract brand data BEFORE decomposing style tags
+    brand_colors = extract_brand_colors(html, soup)
+    logo_url = extract_logo(soup, url)
+
     for tag in soup(["script", "style", "nav", "footer", "header"]):
         tag.decompose()
     body_text = soup.get_text(separator=" ", strip=True)
-    body_text = re.sub(r'\s+', ' ', body_text)[:6000]  # cap at 6k chars
+    body_text = re.sub(r'\s+', ' ', body_text)[:6000]
 
-    # ── IMAGES ──
+    brand_identity = extract_brand_identity(soup, body_text)
+
     images = soup.find_all("img")
     total_images = len(images)
     images_missing_alt = len([i for i in images if not i.get("alt", "").strip()])
 
-    # ── LINKS ──
     all_links = soup.find_all("a", href=True)
     internal_links = [a["href"] for a in all_links if url.split("/")[2] in a["href"] or a["href"].startswith("/")]
     external_links = [a["href"] for a in all_links if a["href"].startswith("http") and url.split("/")[2] not in a["href"]]
 
-    # ── SCHEMA MARKUP ──
     schema_tags = soup.find_all("script", type="application/ld+json")
     schema_found = []
     for tag in schema_tags:
@@ -109,7 +219,6 @@ async def scrape_website(url: str) -> dict:
         except:
             pass
 
-    # ── FAQ SIGNALS ──
     text_lower = body_text.lower()
     faq_signals = {
         "has_faq_section": bool(soup.find(id=re.compile("faq", re.I)) or soup.find(class_=re.compile("faq", re.I))),
@@ -117,13 +226,10 @@ async def scrape_website(url: str) -> dict:
         "has_faq_schema": any("faqpage" in s.lower() for s in schema_found),
     }
 
-    # ── NAP (Name/Address/Phone) ──
     phone_pattern = re.findall(r'(\(?\d{3}\)?[\s\-\.]\d{3}[\s\-\.]\d{4})', body_text)
     unique_phones = list(set(phone_pattern))
-
     address_signals = any(word in text_lower for word in ["street", "ave", "blvd", "suite", "ste.", " tx ", " texas "])
 
-    # ── PERFORMANCE SIGNALS ──
     has_sitemap = False
     has_robots = False
     try:
@@ -135,7 +241,6 @@ async def scrape_website(url: str) -> dict:
     except:
         pass
 
-    # ── SSL ──
     is_https = url.startswith("https")
 
     return {
@@ -160,6 +265,9 @@ async def scrape_website(url: str) -> dict:
         "has_sitemap": has_sitemap,
         "has_robots_txt": has_robots,
         "is_https": is_https,
+        "brand_colors": brand_colors,
+        "logo_url": logo_url,
+        "brand_identity": brand_identity,
     }
 
 # ─────────────────────────────────────────
@@ -167,7 +275,7 @@ async def scrape_website(url: str) -> dict:
 # ─────────────────────────────────────────
 @app.get("/")
 async def health():
-    return {"status": "IA Intelligence Engine is live", "version": "1.0.0"}
+    return {"status": "IA Intelligence Engine is live", "version": "2.0.0"}
 
 @app.post("/audit")
 async def audit_endpoint(request: AuditRequest):
@@ -185,6 +293,9 @@ async def audit_endpoint(request: AuditRequest):
         "url_analyzed": clean_url,
         "business_name": request.business_name,
         "contact_name": request.contact_name,
+        "brand_colors": scraped["brand_colors"],
+        "logo_url": scraped["logo_url"],
+        "brand_identity": scraped["brand_identity"],
         "report": report
     }
 
@@ -204,6 +315,9 @@ async def audit_with_pdf_endpoint(request: AuditRequest):
         "url_analyzed": clean_url,
         "business_name": request.business_name,
         "contact_name": request.contact_name,
+        "brand_colors": scraped["brand_colors"],
+        "logo_url": scraped["logo_url"],
+        "brand_identity": scraped["brand_identity"],
         "report": report
     }
     pdf_base64 = generate_pdf_base64(audit_data)

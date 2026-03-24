@@ -39,6 +39,19 @@ BUSINESS CONTEXT:
 Return ONLY a valid JSON object in this exact structure:
 
 {{
+  "brand_intelligence": {{
+    "tagline": "their main tagline or H1 hero text",
+    "mission": "their mission statement if found, or your read of their purpose from copy",
+    "voice_tone": "formal / casual / corporate / conversational / inconsistent",
+    "what_they_say": "1-2 sentences on how the business presents itself",
+    "what_it_actually_communicates": "honest assessment of the actual message landing",
+    "brand_gap": "specific gap between intent and reality",
+    "leadership": ["Name - Title if found"],
+    "founded": "year if found or empty string",
+    "location": "city/state if found or empty string",
+    "nap_consistency": "consistent / inconsistent / incomplete — with specifics",
+    "brand_color_assessment": "1 sentence on whether their color palette feels on-brand for their industry"
+  }},
   "brand_snapshot": {{
     "what_they_say": "1-2 sentences on how the business presents itself",
     "what_it_actually_communicates": "honest assessment of the actual message landing",
