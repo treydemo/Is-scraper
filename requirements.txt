@@ -5,3 +5,4 @@ beautifulsoup4==4.12.3
 pydantic==2.7.1
 python-dotenv==1.0.1
 lxml==5.2.2
+weasyprint==62.3

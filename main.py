@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from urllib.parse import urlparse, urlunparse
 from bs4 import BeautifulSoup
 from audit import run_audit
+from pdf_generator import generate_pdf_base64
 
 app = FastAPI(title="IA Website Intelligence Engine", version="1.0.0")
 
@@ -185,4 +186,29 @@ async def audit_endpoint(request: AuditRequest):
         "business_name": request.business_name,
         "contact_name": request.contact_name,
         "report": report
+    }
+
+@app.post("/audit-with-pdf")
+async def audit_with_pdf_endpoint(request: AuditRequest):
+    clean_url = normalize_url(request.url)
+    scraped = await scrape_website(clean_url)
+    report = await run_audit(
+        scraped_data=scraped,
+        business_name=request.business_name,
+        contact_name=request.contact_name,
+        challenge=request.challenge
+    )
+    audit_data = {
+        "status": "success",
+        "url_submitted": request.url,
+        "url_analyzed": clean_url,
+        "business_name": request.business_name,
+        "contact_name": request.contact_name,
+        "report": report
+    }
+    pdf_base64 = generate_pdf_base64(audit_data)
+    return {
+        **audit_data,
+        "pdf_base64": pdf_base64,
+        "pdf_filename": f"IA-Audit-{request.business_name.replace(' ', '-')}.pdf"
     }
