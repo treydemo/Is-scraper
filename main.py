@@ -9,7 +9,6 @@ from pydantic import BaseModel
 from urllib.parse import urlparse, urlunparse
 from bs4 import BeautifulSoup
 from audit import run_audit
-from pdf_generator import generate_pdf_base64
 
 app = FastAPI(title="IA Website Intelligence Engine", version="2.0.0")
 
@@ -73,28 +72,49 @@ def extract_brand_colors(html: str, soup: BeautifulSoup) -> dict:
 # LOGO EXTRACTOR
 # ─────────────────────────────────────────
 def extract_logo(soup: BeautifulSoup, base_url: str) -> str:
+    from urllib.parse import urlparse
+
+    def resolve(src):
+        if not src:
+            return ""
+        if src.startswith("http"):
+            return src
+        if src.startswith("//"):
+            return "https:" + src
+        if src.startswith("/"):
+            parsed = urlparse(base_url)
+            return f"{parsed.scheme}://{parsed.netloc}{src}"
+        return ""
+
+    # 1. Logo by class/id/alt — most reliable
+    for attr in [
+        {"class": re.compile(r"logo", re.I)},
+        {"id": re.compile(r"logo", re.I)},
+        {"alt": re.compile(r"logo", re.I)},
+        {"class": re.compile(r"site-logo|brand-logo|navbar-brand", re.I)},
+    ]:
+        candidates = soup.find_all("img", attrs=attr)
+        for c in candidates:
+            src = c.get("src", "") or c.get("data-src", "")
+            resolved = resolve(src)
+            if resolved:
+                return resolved
+
+    # 2. Header/nav img
+    for header_tag in ["header", "nav"]:
+        section = soup.find(header_tag)
+        if section:
+            img = section.find("img")
+            if img:
+                src = img.get("src", "") or img.get("data-src", "")
+                resolved = resolve(src)
+                if resolved:
+                    return resolved
+
+    # 3. OG image last — often a social share graphic, not the logo
     og_image = soup.find("meta", property="og:image")
     if og_image and og_image.get("content"):
         return og_image["content"]
-
-    for attr in [{"class": re.compile(r"logo", re.I)}, {"id": re.compile(r"logo", re.I)}, {"alt": re.compile(r"logo", re.I)}]:
-        candidates = soup.find_all("img", attrs=attr)
-        if candidates:
-            src = candidates[0].get("src", "")
-            if src.startswith("http"):
-                return src
-            elif src.startswith("/"):
-                return base_url + src
-
-    header = soup.find("header")
-    if header:
-        img = header.find("img")
-        if img:
-            src = img.get("src", "")
-            if src.startswith("http"):
-                return src
-            elif src.startswith("/"):
-                return base_url + src
 
     return ""
 
@@ -301,6 +321,7 @@ async def audit_endpoint(request: AuditRequest):
 
 @app.post("/audit-with-pdf")
 async def audit_with_pdf_endpoint(request: AuditRequest):
+    from pdf_generator import generate_pdf_base64
     clean_url = normalize_url(request.url)
     scraped = await scrape_website(clean_url)
     report = await run_audit(
