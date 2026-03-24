@@ -351,6 +351,14 @@ async def audit_endpoint(request: AuditRequest):
         contact_name=request.contact_name,
         challenge=request.challenge
     )
+    def score_color(s): return "#22c55e" if s > 65 else ("#f59e0b" if s > 40 else "#ef4444")
+    def score_label(s): return "Strong" if s > 65 else ("Moderate" if s > 40 else "Critical")
+    report["seo_score_color"] = score_color(report.get("seo_score", 0))
+    report["aeo_score_color"] = score_color(report.get("aeo_score", 0))
+    report["geo_score_color"] = score_color(report.get("geo_score", 0))
+    report["seo_score_label"] = score_label(report.get("seo_score", 0))
+    report["aeo_score_label"] = score_label(report.get("aeo_score", 0))
+    report["geo_score_label"] = score_label(report.get("geo_score", 0))
     return {
         "status": "success",
         "url_submitted": request.url,
@@ -360,6 +368,7 @@ async def audit_endpoint(request: AuditRequest):
         "brand_colors": scraped["brand_colors"],
         "logo_url": scraped["logo_url"],
         "brand_identity": scraped["brand_identity"],
+        "brand_intelligence": report.get("brand_intelligence", {}),
         "report": report
     }
 
