@@ -138,15 +138,59 @@ def extract_brand_identity(soup: BeautifulSoup, body_text: str) -> dict:
             mission = match.group(0).strip()[:300]
             break
 
-    # Leadership
+    # Leadership — check schema first, then HTML elements, then text patterns
     leadership = []
-    for pattern in [
-        r'([A-Z][a-z]+ [A-Z][a-z]+)[,\s]+(?:CEO|CTO|COO|Founder|President|Director|Owner)',
-        r'(?:CEO|CTO|COO|Founder|President|Director|Owner)[,\s]+([A-Z][a-z]+ [A-Z][a-z]+)',
-    ]:
-        for m in re.findall(pattern, body_text)[:3]:
-            if m not in leadership:
-                leadership.append(m)
+    titles = r'(?:CEO|CTO|COO|CFO|CMO|CIO|Founder|Co-Founder|President|Owner|Director|Principal|Partner|Managing)'
+
+    # 1. JSON-LD schema — most reliable
+    for script in soup.find_all("script", type="application/ld+json"):
+        try:
+            import json as _json
+            data = _json.loads(script.string or "")
+            for key in ["founder", "employee", "member", "author"]:
+                entries = data.get(key, [])
+                if isinstance(entries, dict):
+                    entries = [entries]
+                for e in entries:
+                    name = e.get("name", "")
+                    if name and len(name.split()) >= 2:
+                        entry = name.strip()
+                        role = e.get("jobTitle", "")
+                        if role:
+                            entry += f" ({role})"
+                        if entry not in leadership:
+                            leadership.append(entry)
+        except Exception:
+            pass
+
+    # 2. HTML elements with title/role nearby (team cards, about pages)
+    if not leadership:
+        for el in soup.find_all(["h2", "h3", "h4", "p", "span", "div"]):
+            text = el.get_text(strip=True)
+            # Look for "Name, Title" or "Name - Title" patterns
+            match = re.match(
+                r'^([A-Z][a-z]+ (?:[A-Z][a-z]+ )?[A-Z][a-z]+)[,\-–]\s*(' + titles + r'[a-zA-Z\s&]*)',
+                text
+            )
+            if match:
+                entry = f"{match.group(1)} ({match.group(2).strip()})"
+                if entry not in leadership:
+                    leadership.append(entry)
+            if len(leadership) >= 4:
+                break
+
+    # 3. Plain text regex fallback
+    if not leadership:
+        for pattern in [
+            r'([A-Z][a-z]+ [A-Z][a-z]+)[,\s]+(' + titles + r')',
+            r'(' + titles + r')[,\s]+([A-Z][a-z]+ [A-Z][a-z]+)',
+        ]:
+            for m in re.findall(pattern, body_text)[:3]:
+                name = m[0] if re.match(r'[A-Z][a-z]+', m[0]) else m[1]
+                role = m[1] if re.match(r'[A-Z][a-z]+', m[0]) else m[0]
+                entry = f"{name} ({role})"
+                if entry not in leadership:
+                    leadership.append(entry)
 
     # Founded year
     founded = ""
