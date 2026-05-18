@@ -1,6 +1,6 @@
 FROM python:3.11-slim
 
-# Install system dependencies for weasyprint PDF generation
+# System deps for weasyprint PDF generation + Playwright Chromium
 RUN apt-get update && apt-get install -y \
     libpango-1.0-0 \
     libpangoft2-1.0-0 \
@@ -10,12 +10,17 @@ RUN apt-get update && apt-get install -y \
     shared-mime-info \
     libcairo2 \
     fonts-liberation \
+    wget \
+    gnupg \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+
+# Install Playwright Chromium browser + its system dependencies
+RUN playwright install chromium && playwright install-deps chromium
 
 COPY . .
 
