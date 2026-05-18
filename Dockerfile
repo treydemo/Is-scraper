@@ -1,6 +1,6 @@
-FROM python:3.11-slim
+FROM mcr.microsoft.com/playwright/python:v1.44.0-jammy
 
-# System deps for weasyprint PDF generation + Playwright Chromium
+# System deps for weasyprint PDF generation
 RUN apt-get update && apt-get install -y \
     libpango-1.0-0 \
     libpangoft2-1.0-0 \
@@ -18,9 +18,6 @@ WORKDIR /app
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-
-# Install Playwright Chromium browser + its system dependencies
-RUN playwright install chromium && playwright install-deps chromium
 
 COPY . .
 
