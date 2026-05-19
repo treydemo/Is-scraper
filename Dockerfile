@@ -1,6 +1,6 @@
 FROM mcr.microsoft.com/playwright/python:v1.44.0-jammy
 
-# System deps for weasyprint PDF generation
+# WeasyPrint system dependencies for PDF generation
 RUN apt-get update && apt-get install -y \
     libpango-1.0-0 \
     libpangoft2-1.0-0 \
@@ -10,8 +10,6 @@ RUN apt-get update && apt-get install -y \
     shared-mime-info \
     libcairo2 \
     fonts-liberation \
-    wget \
-    gnupg \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

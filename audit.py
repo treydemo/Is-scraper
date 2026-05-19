@@ -1,60 +1,50 @@
 import os
 import json
-import httpx
-from fastapi import HTTPException
+import anthropic
 
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 CLAUDE_MODEL = "claude-sonnet-4-20250514"
 
-SYSTEM_PROMPT = """You are the Immersive Authority & Visibility Audit Engine for Immersive Agentics, an AI marketing agency based in Dallas, TX.
+SYSTEM_PROMPT = (
+    "You are the Immersive Authority & Visibility Audit Engine. You analyze local businesses "
+    "across 5 channels and produce honest, specific, actionable audit reports. "
+    "Never be generic. Every finding must reference the specific business. "
+    "Never invent data not provided to you. Return ONLY valid JSON, no markdown, no preamble."
+)
 
-You analyze businesses across 5 channels and return two master scores plus detailed channel breakdowns.
+USER_TEMPLATE = """\
+Analyze this business audit data and return the JSON report.
 
-AUTHORITY = Are they positioned as a trusted, credible expert in their market?
-VISIBILITY = Can customers find them everywhere they search?
-
-CRITICAL RULES:
-- Be specific. Use actual data from the channel results. Never be generic.
-- Be direct and plain-spoken. No buzzwords. No "leverage" or "synergy."
-- Scores must be honest. A weak channel gets a weak score. Do not sugarcoat.
-- The ia_pitch must feel tailored — reference their actual gaps, not a generic pitch.
-- The tone is professional but warm — like a smart friend who happens to be a marketing expert.
-
-SCORING GUIDE:
-- 80-100: Strong foundation, minor gaps
-- 60-79: Functional but missing key elements
-- 40-59: Significant gaps hurting authority/visibility
-- Below 40: Critical issues — essentially invisible or uncredible online
-
-AUTHORITY is weighted by: website quality, schema/FAQ presence, GBP completeness, YouTube depth, brand consistency
-VISIBILITY is weighted by: GBP rating/reviews, LSA/local pack presence, social reach, YouTube subscribers, site indexability
-
-OUTPUT FORMAT: Return a single clean JSON object. No markdown. No preamble. Just the JSON."""
-
-AUDIT_PROMPT = """Analyze the following 5-channel data and produce a full Immersive Authority & Visibility Audit.
-
-CHANNEL DATA:
-{channel_json}
-
-BUSINESS CONTEXT:
-- Business Name: {business_name}
+BUSINESS:
+- Name: {business_name}
 - Contact: {contact_name}
 - Location: {location}
-- Their Stated Challenge: {challenge}
+- Stated Challenge: {challenge}
 
-Return ONLY a valid JSON object in this exact structure:
+COMPUTED SCORES (use as reference, adjust ±10 based on qualitative factors):
+- SEO Trust Score: {seo_score}/100
+- AI Visibility Score: {ai_score}/100
+
+AUDIT DATA:
+{channel_json}
+
+Return ONLY this exact JSON structure (no markdown, no preamble):
 
 {{
-  "authority_score": 0,
-  "visibility_score": 0,
-  "authority_grade": "A",
-  "visibility_grade": "B",
-  "executive_summary": "2-3 sentence plain English summary of their overall authority and visibility position",
+  "executive_summary": "3 sentences. Specific to this business. What is their biggest problem and what does it cost them.",
+
+  "brand_intelligence": {{
+    "what_they_say": "1-sentence summary of their positioning based on title/h1/body text",
+    "voice_tone": "professional/casual/authoritative/corporate/friendly/technical",
+    "brand_color_assessment": "1-2 sentences — does the color scheme convey trust and authority for their industry?",
+    "brand_gap": "biggest brand credibility gap found. Be specific. Not generic."
+  }},
+
   "channel_scores": {{
     "website": {{
       "score": 0,
-      "wins": ["specific win from data"],
-      "issues": ["specific issue from data"],
+      "wins": ["specific win referencing actual scraped data"],
+      "issues": ["specific issue referencing actual scraped data"],
       "recommendations": ["specific actionable recommendation"]
     }},
     "gbp": {{
@@ -69,101 +59,155 @@ Return ONLY a valid JSON object in this exact structure:
       "issues": [],
       "recommendations": []
     }},
-    "youtube": {{
+    "social": {{
       "score": 0,
       "wins": [],
       "issues": [],
       "recommendations": []
     }},
-    "socials": {{
+    "youtube": {{
       "score": 0,
       "wins": [],
       "issues": [],
       "recommendations": []
     }}
   }},
-  "top_authority_gaps": ["gap1", "gap2", "gap3"],
-  "top_visibility_gaps": ["gap1", "gap2", "gap3"],
-  "quick_wins": ["specific action that can be done this week", "action2", "action3"],
-  "recommended_next_steps": ["30-day priority step", "60-day step", "90-day step"],
-  "brand_intelligence": {{
-    "tagline": "their main H1 or hero text",
-    "voice_tone": "formal / casual / corporate / conversational / inconsistent",
-    "what_they_say": "1-2 sentences on how the business presents itself",
-    "what_it_actually_communicates": "honest assessment of the message that actually lands",
-    "brand_gap": "specific gap between stated intent and actual perception",
-    "nap_consistency": "consistent / inconsistent / incomplete — with specifics",
-    "brand_color_assessment": "1 sentence on whether their color palette feels on-brand for their industry"
-  }},
-  "ia_pitch": "1-2 sentence pitch for how Immersive Agentics specifically fixes the biggest gaps found — reference the actual gaps by name"
+
+  "top_seo_gaps": [
+    "Specific SEO gap 1 with its business impact",
+    "Specific SEO gap 2 with its business impact",
+    "Specific SEO gap 3 with its business impact"
+  ],
+
+  "top_visibility_gaps": [
+    "Specific visibility gap 1",
+    "Specific visibility gap 2",
+    "Specific visibility gap 3"
+  ],
+
+  "quick_wins": [
+    "Specific action completable in 1 week — reference actual gap",
+    "Specific action completable in 1 week — reference actual gap",
+    "Specific action completable in 1 week — reference actual gap"
+  ],
+
+  "recommended_next_steps": [
+    "30-day priority action 1",
+    "30-day priority action 2",
+    "30-day priority action 3"
+  ],
+
+  "ia_pitch": "4 sentences. Sentence 1: name their single biggest specific gap by name. Sentence 2: name the competitor advantage they are losing to right now. Sentence 3: state exactly which Immersive Agentics service fixes it. Sentence 4: urgency — the window to own this position in their market is closing and competitors are moving fast."
 }}
-
-GRADING SCALE:
-- A: 80-100
-- B: 65-79
-- C: 50-64
-- D: 35-49
-- F: 0-34
-
-When setting channel_scores, use the raw scores provided in the channel data as your starting point, then adjust ±10 based on qualitative factors you observe. Do not invent data not present in the channel results."""
+"""
 
 
 async def run_audit(
-    channel_data: dict,
+    website_data: dict,
+    pagespeed_data: dict,
+    gbp_data: dict,
+    lsa_data: dict,
+    youtube_data: dict,
+    social_data: dict,
+    ai_citation_data: dict,
+    schema_data: dict,
+    competitors: list,
     business_name: str,
     contact_name: str,
     challenge: str,
-    location: str = "",
+    location: str,
+    seo_score: int,
+    ai_score: int,
 ) -> dict:
-    if not ANTHROPIC_API_KEY:
-        raise HTTPException(status_code=500, detail="ANTHROPIC_API_KEY not configured")
+    # Trim body_text_sample to keep prompt manageable
+    trimmed = dict(website_data)
+    trimmed["body_text_sample"] = trimmed.get("body_text_sample", "")[:2000]
 
-    # Trim body_text_sample to keep prompt size manageable
-    trimmed = json.loads(json.dumps(channel_data))
-    if "website" in trimmed and "body_text_sample" in trimmed["website"]:
-        trimmed["website"]["body_text_sample"] = trimmed["website"]["body_text_sample"][:3000]
+    channel_summary = {
+        "website": {
+            "scrape_status": trimmed.get("scrape_status"),
+            "title": trimmed.get("title"),
+            "meta_description": trimmed.get("meta_description"),
+            "h1": trimmed.get("h1"),
+            "h2s": trimmed.get("h2s", [])[:5],
+            "is_https": trimmed.get("is_https"),
+            "has_sitemap": trimmed.get("has_sitemap"),
+            "has_robots": trimmed.get("has_robots"),
+            "schema_types_found": trimmed.get("schema_types_found", []),
+            "images_missing_alt": trimmed.get("images_missing_alt"),
+            "internal_links_count": trimmed.get("internal_links_count"),
+            "tagline": trimmed.get("tagline"),
+            "mission": trimmed.get("mission"),
+            "leadership": trimmed.get("leadership", []),
+            "brand_colors": trimmed.get("brand_colors", {}),
+            "body_excerpt": trimmed.get("body_text_sample", "")[:500],
+        },
+        "pagespeed": pagespeed_data,
+        "gbp": gbp_data,
+        "lsa": lsa_data,
+        "youtube": youtube_data,
+        "social": social_data,
+        "ai_citation": ai_citation_data,
+        "schema": schema_data,
+        "competitors": competitors,
+    }
 
-    prompt = (
-        AUDIT_PROMPT
-        .replace("{channel_json}", json.dumps(trimmed, indent=2))
-        .replace("{business_name}", business_name or "Unknown")
-        .replace("{contact_name}", contact_name or "Business Owner")
-        .replace("{location}", location or "Not specified")
-        .replace("{challenge}", challenge or "Not specified")
+    prompt = USER_TEMPLATE.format(
+        business_name=business_name or "Unknown",
+        contact_name=contact_name or "Business Owner",
+        location=location or "Not specified",
+        challenge=challenge or "Not specified",
+        seo_score=seo_score,
+        ai_score=ai_score,
+        channel_json=json.dumps(channel_summary, indent=2),
     )
 
-    headers = {
-        "x-api-key": ANTHROPIC_API_KEY,
-        "anthropic-version": "2023-06-01",
-        "content-type": "application/json",
-    }
-    payload = {
-        "model": CLAUDE_MODEL,
-        "max_tokens": 4000,
-        "system": SYSTEM_PROMPT,
-        "messages": [{"role": "user", "content": prompt}],
-    }
+    try:
+        client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+        response = client.messages.create(
+            model=CLAUDE_MODEL,
+            max_tokens=4000,
+            system=SYSTEM_PROMPT,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        raw = response.content[0].text.strip()
+    except Exception as e:
+        return _empty_report(f"Claude API error: {str(e)}")
 
-    async with httpx.AsyncClient(timeout=90) as client:
-        try:
-            response = await client.post(
-                "https://api.anthropic.com/v1/messages",
-                headers=headers,
-                json=payload,
-            )
-            response.raise_for_status()
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Claude API error: {str(e)}")
-
-    raw_text = response.json()["content"][0]["text"].strip()
-
-    if raw_text.startswith("```"):
-        raw_text = raw_text.split("```")[1]
-        if raw_text.startswith("json"):
-            raw_text = raw_text[4:]
-    raw_text = raw_text.strip()
+    # Strip markdown fences if present
+    if raw.startswith("```"):
+        lines = raw.splitlines()
+        inner = lines[1:] if lines[0].startswith("```") else lines
+        if inner and inner[-1].strip() == "```":
+            inner = inner[:-1]
+        raw = "\n".join(inner).strip()
 
     try:
-        return json.loads(raw_text)
+        return json.loads(raw)
     except json.JSONDecodeError:
-        return {"raw_report": raw_text, "parse_error": True}
+        return _empty_report("Claude returned malformed JSON")
+
+
+def _empty_report(error: str) -> dict:
+    empty_channel = {"score": 0, "wins": [], "issues": [error], "recommendations": []}
+    return {
+        "executive_summary": "",
+        "brand_intelligence": {
+            "what_they_say": "",
+            "voice_tone": "unknown",
+            "brand_color_assessment": "",
+            "brand_gap": "",
+        },
+        "channel_scores": {
+            "website": empty_channel,
+            "gbp": {**empty_channel, "issues": []},
+            "lsa": {**empty_channel, "issues": []},
+            "social": {**empty_channel, "issues": []},
+            "youtube": {**empty_channel, "issues": []},
+        },
+        "top_seo_gaps": [],
+        "top_visibility_gaps": [],
+        "quick_wins": [],
+        "recommended_next_steps": [],
+        "ia_pitch": "",
+    }
