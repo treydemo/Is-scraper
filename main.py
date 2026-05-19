@@ -365,13 +365,11 @@ async def scrape_website(url: str) -> dict:
 # ── STEP 2: PAGESPEED ──────────────────────────────────────────────────────────
 async def get_pagespeed(url: str) -> dict:
     default = {"mobile_score": None, "fcp": None, "lcp": None, "cls": None, "tbt": None}
-    if not GOOGLE_API_KEY:
-        return default
     try:
-        async with httpx.AsyncClient(timeout=25) as client:
+        async with httpx.AsyncClient(timeout=30) as client:
             resp = await client.get(
                 "https://www.googleapis.com/pagespeedonline/v5/runPagespeed",
-                params={"url": url, "strategy": "mobile", "key": GOOGLE_API_KEY}
+                params={"url": url, "strategy": "mobile"}
             )
             if resp.status_code != 200:
                 return default
@@ -820,39 +818,77 @@ async def audit_competitors(business_name: str, location: str,
             page = await ctx.new_page()
             try:
                 await page.goto(
-                    f"https://www.google.com/search?q={query.replace(' ', '+')}",
+                    f"https://www.google.com/search?q={query.replace(' ', '+')}&num=10",
                     wait_until="domcontentloaded", timeout=15000
                 )
-                await page.wait_for_timeout(2000)
+                await page.wait_for_timeout(2500)
                 soup = BeautifulSoup(await page.content(), "html.parser")
+                page_text = soup.get_text().lower()
                 seen_domains = set()
 
-                for result in soup.find_all(["div", "a"], href=re.compile(r'^https?://')):
-                    href = result.get("href", "")
-                    if not href.startswith("http"): continue
-                    parsed = urlparse(href)
-                    dom = parsed.netloc.replace("www.", "")
-                    if not dom or dom == audit_domain: continue
-                    if any(skip in dom for skip in SKIP_DOMAINS): continue
-                    if dom in seen_domains: continue
-                    seen_domains.add(dom)
+                # Strategy 1: cite tags — Google renders the display URL here, very stable
+                cite_urls = []
+                for cite in soup.find_all("cite"):
+                    text = cite.get_text(strip=True)
+                    # cite text looks like "businessname.com › page" or just "businessname.com"
+                    domain_candidate = text.split("›")[0].split("/")[0].strip().lower()
+                    if domain_candidate and "." in domain_candidate:
+                        cite_urls.append(("https://" + domain_candidate, cite))
 
-                    txt = result.get_text()
-                    name_el = result.find_previous(["h3", "h2"])
-                    name = name_el.get_text(strip=True) if name_el else dom.split(".")[0].title()
-                    rm = re.search(r'(\d\.\d)\s*(?:stars?|\()', txt)
-                    rev = re.search(r'([\d,]+)\s*(?:reviews?|ratings?)', txt, re.IGNORECASE)
-                    has_lsa = "google guaranteed" in txt.lower() or "google screened" in txt.lower()
+                # Strategy 2: /url?q= hrefs — Google wraps organic result links this way
+                for a in soup.find_all("a", href=True):
+                    href = a["href"]
+                    if href.startswith("/url?q="):
+                        actual = href.split("/url?q=")[1].split("&")[0]
+                        try:
+                            from urllib.parse import unquote
+                            actual = unquote(actual)
+                            if actual.startswith("http"):
+                                cite_urls.append((actual, a))
+                        except Exception:
+                            pass
 
-                    competitors.append({
-                        "competitor_name": name[:60],
-                        "competitor_url": f"{parsed.scheme}://{parsed.netloc}",
-                        "competitor_gbp_rating": float(rm.group(1)) if rm else None,
-                        "competitor_gbp_reviews": int(rev.group(1).replace(",","")) if rev else None,
-                        "competitor_has_lsa": has_lsa,
-                        "competitor_local_pack_position": None,
-                    })
-                    if len(competitors) >= 3: break
+                for raw_url, tag in cite_urls:
+                    try:
+                        parsed = urlparse(raw_url)
+                        dom = parsed.netloc.replace("www.", "").strip()
+                        if not dom or "." not in dom: continue
+                        if dom == audit_domain: continue
+                        if any(skip in dom for skip in SKIP_DOMAINS): continue
+                        if dom in seen_domains: continue
+                        seen_domains.add(dom)
+
+                        # Walk up to find the result block for name + rating context
+                        block = tag
+                        for _ in range(6):
+                            if block and block.parent:
+                                block = block.parent
+                            else:
+                                break
+                        block_text = block.get_text() if block else ""
+
+                        # Name: prefer the nearest h3 inside the block
+                        h3 = block.find("h3") if block else None
+                        name = h3.get_text(strip=True) if h3 else dom.split(".")[0].replace("-", " ").title()
+
+                        rm = re.search(r'(\d\.\d)\s*(?:stars?|\(|★)', block_text)
+                        rev = re.search(r'([\d,]+)\s*(?:reviews?|ratings?)', block_text, re.IGNORECASE)
+                        has_lsa = ("google guaranteed" in block_text.lower() or
+                                   "google screened" in block_text.lower())
+
+                        competitors.append({
+                            "competitor_name": name[:60],
+                            "competitor_url": f"https://{dom}",
+                            "competitor_gbp_rating": float(rm.group(1)) if rm else None,
+                            "competitor_gbp_reviews": int(rev.group(1).replace(",","")) if rev else None,
+                            "competitor_has_lsa": has_lsa,
+                            "competitor_local_pack_position": None,
+                        })
+                        if len(competitors) >= 3:
+                            break
+                    except Exception:
+                        continue
+
             except Exception:
                 pass
             await browser.close()
