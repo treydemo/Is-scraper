@@ -460,9 +460,13 @@ async def audit_gbp(business_name: str, location: str, phone: str, audit_url: st
     confidence = "high"
     note = None
     if gbp_name and business_name:
-        a_words = set(business_name.lower().split())
-        b_words = set(gbp_name.lower().split())
-        if not (a_words & b_words):
+        # Strip common filler words before comparing
+        STOP = {"the", "a", "an", "of", "and", "or", "in", "at", "for", "sit", "dog", "llc", "inc", "co"}
+        a_words = set(business_name.lower().split()) - STOP
+        b_words = set(gbp_name.lower().split()) - STOP
+        overlap = a_words & b_words
+        # Require at least one meaningful word in common
+        if not overlap:
             confidence = "low"
             note = "GBP listing may not match — please verify your Google Business Profile"
 
