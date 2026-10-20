@@ -70,6 +70,12 @@ def recent_for_domain(domain: str) -> dict | None:
     return get(r["id"]) if r else None
 
 
+def count_since(minutes: int) -> int:
+    since = (datetime.now(timezone.utc) - timedelta(minutes=minutes)).isoformat()
+    with _conn() as c:
+        return c.execute("select count(*) from jobs where created_at>? and cached_from is null", (since,)).fetchone()[0]
+
+
 def links(job_id: str, token: str) -> dict:
     base = config.PUBLIC_BASE_URL
     return {"report_url": f"{base}/r/{job_id}?t={token}", "pdf_url": f"{base}/r/{job_id}.pdf?t={token}",

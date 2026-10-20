@@ -96,13 +96,22 @@ async def health():
             "auth_configured": bool(config.AUDIT_API_KEY)}
 
 
+def _is_allowed_tally(body: dict) -> bool:
+    d = body.get("data") if isinstance(body, dict) else None
+    return (isinstance(d, dict) and body.get("eventType") == "FORM_RESPONSE"
+            and d.get("formId") in config.TALLY_FORM_IDS and isinstance(d.get("fields"), list))
+
+
 @app.post("/jobs")
 async def create_job(request: Request, background: BackgroundTasks, x_api_key: str | None = Header(None)):
-    _auth(x_api_key)
     try:
         body = await request.json()
     except Exception:
         raise HTTPException(400, "JSON body required")
+    if x_api_key or not _is_allowed_tally(body):
+        _auth(x_api_key)
+    elif jobs.count_since(60) >= config.PUBLIC_HOURLY_CAP:
+        raise HTTPException(429, "audit capacity reached, try again later")
     req = _flatten(body)
     if not normalize_url(req.get("url", "")) or "." not in req.get("url", ""):
         raise HTTPException(422, "url is required")

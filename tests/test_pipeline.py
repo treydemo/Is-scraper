@@ -248,3 +248,11 @@ def test_tally_flatten():
     assert out["youtube_url"] == "https://youtube.com/@x"
     assert out["contact_name"] == "Bob Smith" and out["email"] == "bob@x.com"
     assert out["challenge"] == "Not showing up on google" and out["callback_url"].startswith("https://hook")
+
+
+def test_public_tally_intake_rules():
+    from app.main import _is_allowed_tally
+    ok = {"eventType": "FORM_RESPONSE", "data": {"formId": "lbY20B", "fields": []}}
+    assert _is_allowed_tally(ok)
+    assert not _is_allowed_tally({"eventType": "FORM_RESPONSE", "data": {"formId": "OTHER", "fields": []}})
+    assert not _is_allowed_tally({"url": "x.com"})

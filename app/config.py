@@ -9,6 +9,9 @@ def _env(name: str, default: str = "") -> str:
 
 # Security
 AUDIT_API_KEY = _env("AUDIT_API_KEY")            # required header X-API-Key on /jobs
+# Tally forms allowed to start audits without an API key (rate-capped). Comma-separated form IDs.
+TALLY_FORM_IDS = {f.strip() for f in _env("TALLY_FORM_IDS", "lbY20B").split(",") if f.strip()}
+PUBLIC_HOURLY_CAP = int(_env("PUBLIC_HOURLY_CAP", "15"))
 CALLBACK_SECRET = _env("CALLBACK_SECRET")            # sent as X-Audit-Signature (HMAC-SHA256 of body)
 DEFAULT_CALLBACK_URL = _env("DEFAULT_CALLBACK_URL", "https://hook.us2.make.com/igdnd6r6476fmtqkxlsidwce2u83do6c")  # Make: IA Audit v5 · Deliver  # used when a job has no callback_url (e.g. Tally posting directly)
 
