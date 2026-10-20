@@ -102,6 +102,46 @@ def _is_allowed_tally(body: dict) -> bool:
             and d.get("formId") in config.TALLY_FORM_IDS and isinstance(d.get("fields"), list))
 
 
+@app.get("/diag")
+async def diag():
+    """One cheap live call per dependency. Error text (no secrets) says which API/project needs fixing."""
+    import httpx
+    from .checks import google
+
+    async def places():
+        async with httpx.AsyncClient() as c:
+            res, err = await google.places_search(c, "coffee shop Dallas TX", max_results=1)
+        return "ok" if res else (err or "no results")
+
+    async def youtube():
+        if not config.GOOGLE_API_KEY:
+            return "not configured"
+        async with httpx.AsyncClient() as c:
+            r = await c.get("https://www.googleapis.com/youtube/v3/channels", timeout=15,
+                            params={"part": "id", "forHandle": "@Google", "key": config.GOOGLE_API_KEY})
+        return "ok" if r.status_code == 200 else f"HTTP {r.status_code}: {r.text[:300]}"
+
+    async def pagespeed():
+        async with httpx.AsyncClient() as c:
+            out = await google.pagespeed(c, "https://example.com")
+        return "ok" if out.get("mobile_score") is not None else (out.get("error") or "no score")
+
+    async def claude():
+        data, err = await llm.claude_json("Return only JSON.", 'Return {"ok": true}', model=config.CLAUDE_FAST_MODEL,
+                                          max_tokens=50)
+        return "ok" if data else err
+
+    async def engine(name):
+        text, err = await llm.ENGINES[name]("Reply with the single word OK.", {"city": "Dallas", "region": "TX"})
+        return "ok" if text else err
+
+    names = ["places", "youtube", "pagespeed", "claude"] + [f"engine:{e}" for e in llm.configured_engines()]
+    coros = [places(), youtube(), pagespeed(), claude()] + [engine(e) for e in llm.configured_engines()]
+    results = await asyncio.gather(*coros, return_exceptions=True)
+    return {"version": config.VERSION,
+            "checks": {n: (r if isinstance(r, str) else f"{type(r).__name__}: {r}")[:400] for n, r in zip(names, results)}}
+
+
 @app.post("/jobs")
 async def create_job(request: Request, background: BackgroundTasks, x_api_key: str | None = Header(None)):
     try:
