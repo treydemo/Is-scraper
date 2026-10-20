@@ -1,0 +1,45 @@
+{% macro color(s) -%}{% if s is none %}#A3A8BC{% elif s >= 80 %}#12A877{% elif s >= 60 %}#7BBF2A{% elif s >= 40 %}#E8A20C{% else %}#DC3B3B{% endif %}{%- endmacro %}
+<div style="background:#F3F4F8;padding:24px 0;font-family:Helvetica,Arial,sans-serif;color:#11142A">
+<table role="presentation" width="600" align="center" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden">
+  <tr><td style="background:#0E1024;padding:28px 32px">
+    <div style="font-size:10px;letter-spacing:2px;text-transform:uppercase;color:#B9A6FF;font-weight:bold">AI Visibility &amp; Authority Audit</div>
+    <div style="font-size:24px;font-weight:800;color:#ffffff;margin-top:8px">{{ b.name }}</div>
+    <div style="font-size:12px;color:#A7ABC6;margin-top:2px">{{ b.domain }}</div>
+    <table role="presentation" cellpadding="0" cellspacing="0" style="margin-top:20px"><tr>
+      <td style="font-size:56px;font-weight:900;color:{{ color(s.overall_score) }};line-height:1">{{ s.overall_score if s.overall_score is not none else '—' }}</td>
+      <td style="padding-left:12px;color:#CFD2E6;font-size:13px;line-height:1.4">out of 100<br><b style="color:#ffffff">{{ s.overall_band }}</b></td>
+    </tr></table>
+  </td></tr>
+  <tr><td style="padding:26px 32px 6px;font-size:15px;line-height:1.55">
+    <p style="margin:0 0 12px">{{ n.email_intro }}</p>
+    <p style="margin:0 0 6px;font-weight:bold;font-size:16px">{{ n.headline }}</p>
+  </td></tr>
+  <tr><td style="padding:6px 32px">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+      {% for sec in s.sections %}
+      <tr>
+        <td style="font-size:13px;padding:6px 0;width:46%">{{ sec.title }}</td>
+        <td style="padding:6px 8px;width:40%"><div style="background:#ECEEF4;border-radius:99px;height:8px"><div style="width:{{ sec.score or 0 }}%;background:{{ color(sec.score) }};height:8px;border-radius:99px"></div></div></td>
+        <td style="font-size:13px;font-weight:bold;text-align:right">{{ sec.score if sec.score is not none else 'n/m' }}</td>
+      </tr>
+      {% endfor %}
+    </table>
+  </td></tr>
+  <tr><td style="padding:16px 32px 4px">
+    {% for f in n.findings %}
+    <div style="border-left:3px solid {{ '#12A877' if f.tone == 'strength' else '#6D3AED' }};padding:4px 0 4px 12px;margin:0 0 12px">
+      <div style="font-weight:bold;font-size:14px">{{ f.title }}</div>
+      <div style="font-size:13px;color:#4A4F68;line-height:1.5">{{ f.detail }}</div>
+    </div>
+    {% endfor %}
+  </td></tr>
+  <tr><td style="padding:8px 32px 28px" align="center">
+    <a href="{{ booking_url }}" style="display:inline-block;background:#6D3AED;color:#ffffff;text-decoration:none;font-weight:bold;font-size:14px;padding:13px 28px;border-radius:8px">Book a 30-minute walkthrough</a>
+    <div style="font-size:12px;color:#6B7088;margin-top:12px">Your full report is attached as a PDF{% if report_url %}, or <a href="{{ report_url }}" style="color:#6D3AED">view it online</a>{% endif %}.</div>
+  </td></tr>
+  <tr><td style="background:#F7F8FB;padding:16px 32px;font-size:11px;color:#8A8FA3;line-height:1.5">
+    Measured {{ date }} from public data: your website as AI crawlers see it, Google listing data, and live answers from {{ (ai.engines or [])|join(', ') or 'AI engines' }}.
+    AI answers change daily; this is a snapshot.<br>Immersive Agentics · <a href="{{ booking_url }}" style="color:#8A8FA3">immersiveagentics.com</a>
+  </td></tr>
+</table>
+</div>
