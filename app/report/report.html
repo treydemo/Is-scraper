@@ -1,0 +1,337 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>{{ b.name }} — AI Visibility & Authority Audit</title>
+<style>
+  @page { size: Letter; margin: 0.55in 0.6in 0.6in;
+    @bottom-left { content: "Immersive Agentics · AI Visibility & Authority Audit"; font: 7.5pt Helvetica, Arial, sans-serif; color: #8A8FA3; }
+    @bottom-right { content: counter(page) " / " counter(pages); font: 7.5pt Helvetica, Arial, sans-serif; color: #8A8FA3; } }
+  @page cover { margin: 0; @bottom-left { content: none } @bottom-right { content: none } }
+  :root { --ink:#11142A; --muted:#5B6078; --line:#E4E6EF; --soft:#F5F6FA; --violet:#6D3AED; --cyan:#0EA5C6;
+          --good:#12A877; --mid:#E8A20C; --bad:#DC3B3B; --na:#A3A8BC; }
+  * { box-sizing: border-box; }
+  body { font-family: Helvetica, Arial, sans-serif; color: var(--ink); font-size: 9.6pt; line-height: 1.45; margin: 0; }
+  h1,h2,h3 { margin: 0; line-height: 1.15; }
+  h2 { font-size: 17pt; letter-spacing: -0.3px; margin-bottom: 4pt; }
+  h3 { font-size: 11pt; margin: 14pt 0 5pt; }
+  p { margin: 0 0 6pt; }
+  .eyebrow { font-size: 7.5pt; letter-spacing: 1.6px; text-transform: uppercase; color: var(--violet); font-weight: 700; margin-bottom: 5pt; }
+  .muted { color: var(--muted); }
+  .small { font-size: 8pt; }
+  .page { page-break-before: always; }
+  .lede { font-size: 10.5pt; color: var(--muted); margin-bottom: 12pt; }
+  .card { border: 1px solid var(--line); border-radius: 8px; padding: 8pt 11pt; margin-bottom: 7pt; background: #fff; }
+  .soft { background: var(--soft); border-color: var(--soft); }
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; font-size: 7.5pt; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); font-weight: 700;
+       border-bottom: 1.5px solid var(--ink); padding: 4pt 6pt; }
+  td { border-bottom: 1px solid var(--line); padding: 4pt 6pt; vertical-align: top; font-size: 8.8pt; }
+  tr.you td { background: #F1ECFF; font-weight: 700; }
+  .pill { display: inline-block; padding: 1.5pt 7pt; border-radius: 99px; font-size: 7.5pt; font-weight: 700; letter-spacing: .3px; }
+  .pass { background: #E3F7EF; color: #0B7A55; } .partial { background: #FFF4DA; color: #9A6700; }
+  .fail { background: #FDE6E6; color: #B42323; } .not_measured, .info { background: #EEF0F5; color: #6B7088; }
+  .bar { height: 7pt; background: #ECEEF4; border-radius: 99px; overflow: hidden; }
+  .bar > i { display: block; height: 100%; border-radius: 99px; }
+  .two { width: 100%; } .two td { border: 0; padding: 0; vertical-align: top; }
+  .stat { font-size: 30pt; font-weight: 800; letter-spacing: -1px; line-height: 1; }
+  .quote { border-left: 3px solid var(--violet); padding: 4pt 0 4pt 9pt; color: var(--ink); margin: 5pt 0; font-size: 9pt; }
+  .swatch { display: inline-block; width: 46pt; margin: 0 6pt 6pt 0; font-size: 7pt; color: var(--muted); text-align: center; }
+  .swatch i { display: block; height: 34pt; border-radius: 6px; border: 1px solid var(--line); margin-bottom: 3pt; }
+  .missing { color: var(--na); font-style: italic; }
+  .lock { border: 1.5px dashed #C9CCDA; border-radius: 8px; padding: 10pt 12pt; color: var(--muted); }
+
+  /* Cover */
+  .cover { page: cover; height: 11in; padding: 0.7in 0.75in; background: #0E1024; color: #fff; position: relative; }
+  .cover .ia { font-size: 8pt; letter-spacing: 2.4px; text-transform: uppercase; color: #B9A6FF; font-weight: 700; }
+  .cover .logo { margin-top: 40pt; height: 54pt; }
+  .cover .logo img { max-height: 54pt; max-width: 220pt; background: #fff; border-radius: 8px; padding: 6pt; }
+  .cover h1 { font-size: 30pt; letter-spacing: -0.8px; margin-top: 18pt; }
+  .cover .sub { color: #A7ABC6; margin-top: 4pt; font-size: 10pt; }
+  .cover .scorewrap { margin-top: 34pt; }
+  .cover .headline { font-size: 15pt; line-height: 1.3; font-weight: 700; margin-top: 4pt; }
+  .cover .summary { color: #CFD2E6; font-size: 10pt; margin-top: 10pt; }
+  .cover .mini td { border-bottom: 1px solid rgba(255,255,255,.08); color: #E6E8F5; padding: 5pt 4pt; }
+  .cover .mini .bar { background: rgba(255,255,255,.12); }
+  .cover .foot { position: absolute; bottom: 0.6in; left: 0.75in; right: 0.75in; font-size: 8pt; color: #8D91AE; }
+</style>
+</head>
+<body>
+{% macro color(s) -%}{% if s is none %}#A3A8BC{% elif s >= 80 %}#12A877{% elif s >= 60 %}#7BBF2A{% elif s >= 40 %}#E8A20C{% else %}#DC3B3B{% endif %}{%- endmacro %}
+{% macro ring(score, size=150, stroke=14, track='#2A2E4D', text='#fff') -%}
+  {% set r = (size - stroke) / 2 %}{% set circ = 2 * 3.14159 * r %}{% set pct = (score or 0) / 100 %}
+  <svg width="{{ size }}" height="{{ size }}" viewBox="0 0 {{ size }} {{ size }}">
+    <circle cx="{{ size/2 }}" cy="{{ size/2 }}" r="{{ r }}" fill="none" stroke="{{ track }}" stroke-width="{{ stroke }}"/>
+    <circle cx="{{ size/2 }}" cy="{{ size/2 }}" r="{{ r }}" fill="none" stroke="{{ color(score) }}" stroke-width="{{ stroke }}"
+            stroke-linecap="round" stroke-dasharray="{{ circ * pct }} {{ circ }}" transform="rotate(-90 {{ size/2 }} {{ size/2 }})"/>
+    <text x="50%" y="50%" dy="0.05em" text-anchor="middle" font-family="Helvetica" font-weight="800"
+          font-size="{{ size * 0.3 }}" fill="{{ text }}">{{ score if score is not none else '—' }}</text>
+    <text x="50%" y="50%" dy="{{ size * 0.2 }}" text-anchor="middle" font-family="Helvetica" font-size="{{ size * 0.075 }}"
+          fill="{{ text }}" opacity=".6">out of 100</text>
+  </svg>
+{%- endmacro %}
+{% macro checklist(sec) -%}
+  <table>
+    <tr><th style="width:40%">Check</th><th style="width:12%">Result</th><th>What we found</th></tr>
+    {% for c in sec.checks %}
+    <tr>
+      <td><b>{{ c.label }}</b>{% if c.points %}<br><span class="small muted">{{ c.earned|round(1) }} / {{ c.points }} pts</span>{% endif %}</td>
+      <td><span class="pill {{ c.status }}">{{ {'pass':'Strong','partial':'Partial','fail':'Gap','not_measured':'Not measured','info':'Info'}[c.status] }}</span></td>
+      <td>{{ c.evidence }}{% if c.fix and c.status in ('fail','partial') %}<br><span class="small" style="color:var(--violet)">Fix: {{ c.fix }}</span>{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </table>
+{%- endmacro %}
+
+<!-- ═════════ COVER ═════════ -->
+<section class="cover">
+  <div class="ia">Immersive Agentics · AI Visibility &amp; Authority Audit</div>
+  <div class="logo">{% if brand.logo and brand.logo.data_uri %}<img src="{{ brand.logo.data_uri }}" alt="">{% endif %}</div>
+  <h1>{{ b.name }}</h1>
+  <div class="sub">{{ b.domain }}{% if b.city %} · {{ b.city }}{% if b.region %}, {{ b.region }}{% endif %}{% endif %} · {{ date }}</div>
+  <table class="two scorewrap"><tr>
+    <td style="width:170pt">{{ ring(s.overall_score) }}</td>
+    <td>
+      <div class="ia" style="color:{{ color(s.overall_score) }}">{{ s.overall_band }}</div>
+      <div class="headline">{{ n.headline }}</div>
+      <div class="summary">{{ n.executive_summary }}</div>
+    </td>
+  </tr></table>
+  <table class="mini" style="margin-top:28pt">
+    {% for sec in s.sections %}
+    <tr>
+      <td style="width:38%">{{ sec.title }}</td>
+      <td style="width:42%"><div class="bar"><i style="width:{{ sec.score or 0 }}%;background:{{ color(sec.score) }}"></i></div></td>
+      <td style="width:20%;text-align:right;font-weight:700">{{ sec.score if sec.score is not none else 'n/m' }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  <div class="foot">Scores are measured from public data on {{ date }}: your website as AI crawlers see it, Google's
+    listing data, and live answers from {{ (ai.engines or [])|join(', ') or 'AI engines' }}. Every point traces to evidence in this report.
+    {% if s.coverage_pct < 100 %}{{ 100 - s.coverage_pct }}% of the scorecard couldn't be measured and is excluded rather than scored as zero.{% endif %}</div>
+</section>
+
+<!-- ═════════ SCORECARD ═════════ -->
+<section class="page">
+  <div class="eyebrow">The scorecard</div>
+  <h2>Six things decide whether AI sends you customers</h2>
+  <p class="lede">Each section below is measured the same way for every business we audit. The right column is the part of the
+    Immersive Authority System built to move that number.</p>
+  <table>
+    <tr><th style="width:30%">Section</th><th style="width:32%">Score</th><th style="width:13%">Standing</th><th>What moves it</th></tr>
+    {% for sec in s.sections %}
+    <tr>
+      <td><b>{{ sec.title }}</b><br><span class="small muted">{{ sec.points }} of 100 points</span></td>
+      <td style="vertical-align:middle"><div class="bar"><i style="width:{{ sec.score or 0 }}%;background:{{ color(sec.score) }}"></i></div>
+        <span class="small muted">{{ sec.score if sec.score is not none else 'Not measured' }}{% if sec.score is not none %}/100{% endif %}</span></td>
+      <td style="vertical-align:middle"><b>{{ sec.band }}</b></td>
+      <td>{{ sec.sells }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+
+  <h3>What stands out</h3>
+  {% for f in n.findings %}
+  <div class="card {% if f.tone == 'strength' %}soft{% endif %}">
+    <span class="pill {{ 'pass' if f.tone == 'strength' else 'fail' }}">{{ 'Strength' if f.tone == 'strength' else 'Gap' }}</span>
+    <b style="margin-left:5pt">{{ f.title }}</b>
+    <p style="margin:4pt 0 0">{{ f.detail }}</p>
+  </div>
+  {% endfor %}
+  {% if scan.note %}<div class="lock small" style="margin-top:6pt">{{ scan.note }}</div>{% endif %}
+</section>
+
+<!-- ═════════ AI ANSWERS ═════════ -->
+<section class="page">
+  <div class="eyebrow">AI Answers · {{ sec_by.ai_answers.score if sec_by.ai_answers.score is not none else 'n/m' }}/100</div>
+  <h2>When customers ask AI, who gets the recommendation?</h2>
+  {% if ai.answers_total %}
+  <p class="lede">We asked {{ ai.engines|join(', ') }} {{ ai.questions|length }} questions your customers actually ask, with live web search on,
+    {{ ai.answers_total }} answers in total.</p>
+  <table class="two"><tr>
+    <td style="width:34%">
+      <div class="card soft" style="text-align:center">
+        <div class="stat" style="color:{{ color(ai.share_of_voice * 2 if ai.share_of_voice is not none else none) }}">{{ ai.share_of_voice }}%</div>
+        <div class="small muted">of AI answers named {{ b.name }}</div>
+      </div>
+      {% for e, v in ai.by_engine.items() %}
+      <div class="small" style="margin:3pt 0"><b>{{ e }}</b>: named in {{ v.named }} of {{ v.asked }}</div>
+      {% endfor %}
+    </td>
+    <td style="padding-left:14pt">
+      <b>Who AI recommends most for your services</b>
+      <table style="margin-top:4pt">
+        <tr><th>Business</th><th style="width:22%">Share of answers</th></tr>
+        {% for t in ai.top_named[:7] %}
+        <tr class="{{ 'you' if t.is_target }}"><td>{{ t.name }}{% if t.is_target %} (you){% endif %}</td><td>{{ t.pct }}%</td></tr>
+        {% endfor %}
+        {% if not ai.top_named %}<tr><td colspan="2" class="muted">No specific businesses were named.</td></tr>{% endif %}
+      </table>
+    </td>
+  </tr></table>
+  {% if n.lost_opportunity %}<div class="card" style="border-color:#D9CCFF;background:#FAF7FF;margin-top:6pt"><b>What this means</b><p style="margin:3pt 0 0">{{ n.lost_opportunity }}</p></div>{% endif %}
+
+  <h3>The receipts</h3>
+  {% for r in receipts[:2] %}
+  <div class="card">
+    <span class="small muted">{{ r.engine }} · {{ r.asked_at[:16]|replace('T',' ') }} UTC</span>
+    <div><b>“{{ r.question }}”</b> <span class="pill {{ 'pass' if r.target_named else 'fail' }}">{{ 'You were named' if r.target_named else 'Not named' }}</span></div>
+    <div class="quote">{{ r.excerpt }}</div>
+  </div>
+  {% endfor %}
+
+  {% if ai.brand_verdicts %}
+  <h3>What AI says about you when asked directly</h3>
+  <table><tr><th style="width:18%">Engine</th><th style="width:16%">Verdict</th><th>Summary</th></tr>
+  {% for v in ai.brand_verdicts %}
+    <tr><td>{{ v.engine }}</td>
+      <td><span class="pill {{ {'accurate':'pass','partly_wrong':'partial','wrong':'fail'}.get(v.accuracy, 'not_measured') }}">{{ (v.accuracy or '')|replace('_',' ')|capitalize }}</span></td>
+      <td>{{ v.summary }}{% if v.errors %}<br><span class="small" style="color:var(--bad)">Got wrong: {{ v.errors|join('; ') }}</span>{% endif %}</td></tr>
+  {% endfor %}</table>
+  {% endif %}
+  {% else %}
+  <div class="lock">AI answers were not measured for this audit{% if ai.error %} ({{ ai.error }}){% endif %}. This section is excluded from your score.</div>
+  {% endif %}
+</section>
+
+<!-- ═════════ WEBSITE THROUGH AI'S EYES ═════════ -->
+<section class="page">
+  <div class="eyebrow">AI-Readable Website · {{ sec_by.ai_readable.score if sec_by.ai_readable.score is not none else 'n/m' }}/100</div>
+  <h2>Your website, as AI crawlers see it</h2>
+  <p class="lede">ChatGPT, Claude and Perplexity send crawlers that read raw HTML and don't run JavaScript. If your content only
+    appears after scripts run, those engines see a mostly empty page.</p>
+  {% if site.js %}
+  <table class="two"><tr>
+    <td style="width:50%;padding-right:8pt"><div class="card soft">
+      <div class="small muted">What a human sees</div><div class="stat">{{ '{:,}'.format(site.js.rendered_chars) }}</div><div class="small muted">characters of text</div></div></td>
+    <td style="padding-left:8pt"><div class="card soft">
+      <div class="small muted">What an AI crawler sees</div><div class="stat" style="color:{{ color((site.js.ratio or 0) * 100) }}">{{ '{:,}'.format(site.js.raw_chars) }}</div>
+      <div class="small muted">characters · {{ ((site.js.ratio or 0) * 100)|round|int }}% of the page</div></div></td>
+  </tr></table>
+  {% endif %}
+  {{ checklist(sec_by.ai_readable) }}
+  {% if site.robots %}
+  <h3>Who's allowed in</h3>
+  <table><tr><th>Crawler</th><th>Powers</th><th style="width:16%">robots.txt</th></tr>
+    {% for bot, ok in site.robots.search.items() %}<tr><td>{{ bot }}</td><td>{{ search_bots[bot] }}</td>
+      <td><span class="pill {{ 'pass' if ok else 'fail' }}">{{ 'Allowed' if ok else 'Blocked' }}</span></td></tr>{% endfor %}
+  </table>
+  {% endif %}
+</section>
+
+<!-- ═════════ CONTENT ═════════ -->
+<section class="page">
+  <div class="eyebrow">Answer Content · {{ sec_by.content.score if sec_by.content.score is not none else 'n/m' }}/100</div>
+  <h2>Does your site answer the questions buyers ask?</h2>
+  <p class="lede">AI engines quote pages that answer questions directly. We looked for FAQs, service and area pages, proof,
+    and how recently the site changed.</p>
+  {{ checklist(sec_by.content) }}
+  {% if ai.questions %}
+  <h3>Questions your buyers are asking AI</h3>
+  {% for q in ai.questions %}<div class="small" style="margin:2pt 0">• {{ q }}</div>{% endfor %}
+  {% endif %}
+</section>
+
+<!-- ═════════ GOOGLE + MARKET ═════════ -->
+<section class="page">
+  <div class="eyebrow">Google Footprint · {{ sec_by.google.score if sec_by.google.score is not none else 'n/m' }}/100 &nbsp;·&nbsp; Local Market · {{ sec_by.market.score if sec_by.market.score is not none else 'n/m' }}/100</div>
+  <h2>How you stack up against the competition</h2>
+  {% if market.competitors %}
+  <p class="lede">Google Maps search: “{{ market.query }}”. The same comparable checks were run on every business below.</p>
+  <table>
+    <tr><th>Business</th><th>Maps rank</th><th>Rating</th><th>Reviews</th><th>AI share</th><th>Comparable score</th></tr>
+    <tr class="you"><td>{{ b.name }} (you)</td><td>{{ '#' ~ market.rank if market.rank else 'Not in top ' ~ (market.results_count or 20) }}</td>
+      <td>{{ g.profile.rating if g.profile and g.profile.rating else '—' }}</td><td>{{ g.profile.review_count if g.profile else '—' }}</td>
+      <td>{{ (ai.share_of_voice ~ '%') if ai.answers_total else '—' }}</td><td>{{ market.you_comparable_score }}</td></tr>
+    {% for c in market.competitors %}
+    <tr><td>{{ c.name }}<br><span class="small muted">{{ (c.website or '')|replace('https://','')|replace('http://','')|truncate(40, True, '') }}</span></td>
+      <td>#{{ c.maps_rank }}</td><td>{{ c.rating or '—' }}</td><td>{{ c.review_count }}</td>
+      <td>{{ (c.ai_sov ~ '%') if c.ai_sov is not none and ai.answers_total else '—' }}</td><td>{{ c.comparable_score }}</td></tr>
+    {% endfor %}
+  </table>
+  <p class="small muted" style="margin-top:4pt">Comparable score uses only signals we measured identically for everyone: Google reviews and rating,
+    local schema, FAQ markup, AI-crawler access, text visible without JavaScript, llms.txt, and AI share of answers.</p>
+  {% endif %}
+  <h3>Google Business Profile</h3>
+  {{ checklist(sec_by.google) }}
+  <h3>Local market position</h3>
+  {{ checklist(sec_by.market) }}
+</section>
+
+<!-- ═════════ DISTRIBUTION + BRAND ═════════ -->
+<section class="page">
+  <div class="eyebrow">Distribution Reach · {{ sec_by.distribution.score if sec_by.distribution.score is not none else 'n/m' }}/100</div>
+  <h2>Where your brand shows up</h2>
+  {{ checklist(sec_by.distribution) }}
+
+  <h3 style="margin-top:18pt">Your brand, as captured from your site</h3>
+  <p class="small muted">Pulled directly from your live website. Anything marked missing isn't published anywhere AI can read it.</p>
+  <table class="two"><tr>
+    <td style="width:48%;padding-right:10pt">
+      <div class="small muted">Logo</div>
+      <div style="height:48pt;margin:3pt 0 8pt">{% if brand.logo and brand.logo.data_uri %}<img src="{{ brand.logo.data_uri }}" style="max-height:46pt;max-width:180pt">{% else %}<span class="missing">Not found</span>{% endif %}</div>
+      <div class="small muted">Colors</div>
+      <div style="margin-top:3pt">{% if brand.palette and brand.palette.swatches %}{% for h in brand.palette.swatches %}<span class="swatch"><i style="background:{{ h }}"></i>{{ h }}</span>{% endfor %}{% else %}<span class="missing">Not captured</span>{% endif %}</div>
+      <div class="small muted" style="margin-top:4pt">Fonts</div>
+      <div>{% if brand.fonts and (brand.fonts.heading or brand.fonts.body) %}Headings: <b>{{ brand.fonts.heading or '—' }}</b> · Body: <b>{{ brand.fonts.body or '—' }}</b>{% if brand.fonts.source %} <span class="small muted">({{ brand.fonts.source }})</span>{% endif %}{% else %}<span class="missing">Not captured</span>{% endif %}</div>
+      <div class="small muted" style="margin-top:8pt">Tagline</div>
+      <div>{{ brand.tagline or '' }}{% if not brand.tagline %}<span class="missing">Not stated</span>{% endif %}</div>
+    </td>
+    <td style="padding-left:10pt">
+      <div class="small muted">Mission</div>
+      <div style="margin-bottom:6pt">{% if brand.mission %}{{ brand.mission.value }}{% else %}<span class="missing">Not published</span>{% endif %}</div>
+      <div class="small muted">Vision</div>
+      <div style="margin-bottom:6pt">{% if brand.vision %}{{ brand.vision.value }}{% else %}<span class="missing">Not published</span>{% endif %}</div>
+      <div class="small muted">Values</div>
+      <div style="margin-bottom:6pt">{% if brand['values'] %}{{ brand['values']|map(attribute='value')|join(' · ') }}{% else %}<span class="missing">Not published</span>{% endif %}</div>
+      <div class="small muted">Leadership</div>
+      <div style="margin-bottom:6pt">{% if brand.leadership %}{% for p in brand.leadership[:6] %}<b>{{ p.name }}</b>{% if p.title %}, {{ p.title }}{% endif %}{% if not loop.last %} · {% endif %}{% endfor %}{% else %}<span class="missing">No one named</span>{% endif %}</div>
+      <div class="small muted">Services</div>
+      <div style="margin-bottom:6pt">{{ brand.services[:8]|join(' · ') if brand.services else '' }}{% if not brand.services %}<span class="missing">Not listed</span>{% endif %}</div>
+      <div class="small muted">Service areas</div>
+      <div>{{ brand.service_areas[:10]|join(' · ') if brand.service_areas else '' }}{% if not brand.service_areas %}<span class="missing">Not listed</span>{% endif %}</div>
+    </td>
+  </tr></table>
+</section>
+
+<!-- ═════════ ROADMAP ═════════ -->
+<section class="page">
+  <div class="eyebrow">Your 90-day roadmap</div>
+  <h2>What to do next</h2>
+  <p class="lede">Priorities one and two are things you can start on yourself. Priority three is the ongoing work that keeps you visible.</p>
+  {% for r in n.roadmap %}
+  <div class="card {% if r.priority == 3 %}soft{% endif %}">
+    <span class="pill" style="background:var(--violet);color:#fff">Priority {{ r.priority }}</span> <b style="margin-left:4pt">{{ r.title }}</b>
+    <p style="margin:4pt 0">{{ r.why }}</p>
+    {% for a in r.actions %}<div class="small">• {{ a }}</div>{% endfor %}
+  </div>
+  {% endfor %}
+
+  <h3>Not in your score yet</h3>
+  <table class="two"><tr>
+    <td style="width:50%;padding-right:6pt"><div class="lock"><b>Inside Google (locked)</b><br><span class="small">{{ unscored.inside_google }}</span></div></td>
+    <td style="padding-left:6pt"><div class="lock"><b>Streaming TV</b><br><span class="small">{{ unscored.streaming_tv }}</span></div></td>
+  </tr></table>
+
+  <div class="card" style="margin-top:14pt;background:#0E1024;color:#fff;border:0">
+    <b style="font-size:12pt">Want us to walk you through it?</b>
+    <p style="color:#CFD2E6;margin:4pt 0 0">30 minutes, your report on screen, what to fix first and what it takes to show up in AI answers in {{ b.city or 'your market' }}.
+      Book at <span style="color:#B9A6FF">{{ booking_url|replace('https://','') }}</span></p>
+  </div>
+</section>
+
+<!-- ═════════ METHOD ═════════ -->
+<section class="page">
+  <div class="eyebrow">How we measured</div>
+  <h2>Method &amp; sources</h2>
+  <p>Website: {{ site.pages_scanned|length }} pages fetched as a normal browser and as an AI crawler; homepage rendered in Chromium.
+    Structured data parsed from JSON-LD. Speed from Google PageSpeed Insights (mobile). Google listing and competitors from the Google
+    Places API. AI answers from {{ (ai.engines or [])|join(', ') or 'no engines' }} with live web search enabled, asked from {{ b.city or 'your market' }}.
+    Audit run {{ date_full }}.</p>
+  <p class="small muted">AI answers vary by day, by phrasing and by person. These results are a snapshot, not a guarantee; the full question list and answers are kept on file.
+    Sections we could not measure are excluded from the score rather than counted against you.</p>
+  <h3>Pages scanned</h3>
+  {% for u in site.pages_scanned %}<div class="small muted">{{ u }}</div>{% endfor %}
+</section>
+</body>
+</html>
