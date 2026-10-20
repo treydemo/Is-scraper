@@ -129,7 +129,7 @@ def summary_of(result: dict) -> dict:
 
 
 async def _callback(job: dict, payload: dict):
-    url = (job["request"] or {}).get("callback_url")
+    url = (job["request"] or {}).get("callback_url") or config.DEFAULT_CALLBACK_URL
     if not url:
         return "no callback"
     body = json.dumps(payload, default=str).encode()

@@ -9,10 +9,11 @@ def _env(name: str, default: str = "") -> str:
 
 # Security
 AUDIT_API_KEY = _env("AUDIT_API_KEY")            # required header X-API-Key on /jobs
-CALLBACK_SECRET = _env("CALLBACK_SECRET")        # sent as X-Audit-Signature (HMAC-SHA256 of body)
+CALLBACK_SECRET = _env("CALLBACK_SECRET")            # sent as X-Audit-Signature (HMAC-SHA256 of body)
+DEFAULT_CALLBACK_URL = _env("DEFAULT_CALLBACK_URL", "https://hook.us2.make.com/igdnd6r6476fmtqkxlsidwce2u83do6c")  # Make: IA Audit v5 · Deliver  # used when a job has no callback_url (e.g. Tally posting directly)
 
 # Where the service lives (used to build report/pdf links in callbacks)
-PUBLIC_BASE_URL = _env("PUBLIC_BASE_URL", "https://is-scraper-production.up.railway.app").rstrip("/")
+PUBLIC_BASE_URL = _env("PUBLIC_BASE_URL", "https://is-scraper-production-23c5.up.railway.app").rstrip("/")
 
 # Storage. Attach a Railway volume at /data to survive redeploys.
 DATA_DIR = Path(_env("DATA_DIR", "/data" if Path("/data").exists() else "./data"))

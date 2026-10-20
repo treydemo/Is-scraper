@@ -12,6 +12,7 @@ import asyncio
 import hmac
 import json
 import logging
+import re
 
 from fastapi import BackgroundTasks, FastAPI, Header, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
@@ -51,11 +52,14 @@ def _flatten(body: dict) -> dict:
             if isinstance(val, list):
                 opts = {o["id"]: o["text"] for o in f.get("options") or []}
                 val = ", ".join(opts.get(v, str(v)) for v in val)
-            if val in (None, ""):
+            if val in (None, "") or isinstance(val, bool):
                 continue
-            if f.get("type") == "INPUT_URL" or "url" in label or "website" in label:
-                key = ("facebook_url" if "facebook" in label else "instagram_url" if "instagram" in label else
-                       "linkedin_url" if "linkedin" in label else "youtube_url" if "youtube" in label else "url")
+            sval = str(val).lower()
+            social = next((s for s in ("facebook", "instagram", "linkedin", "youtube") if s in label or s + ".com" in sval), None)
+            if social:
+                key = f"{social}_url"
+            elif f.get("type") == "INPUT_URL" or "url" in label or "website" in label:
+                key = "url"
             elif f.get("type") == "INPUT_EMAIL" or "email" in label:
                 key = "email"
             elif f.get("type") == "INPUT_PHONE_NUMBER" or "phone" in label:
@@ -69,6 +73,10 @@ def _flatten(body: dict) -> dict:
             elif "location" in label or "city" in label:
                 key = "location"
             elif "challenge" in label:
+                key = "challenge"
+            elif f.get("type") == "INPUT_TEXT" and re.match(r"^(https?://)?(www\.)?[\w-]+(\.[\w-]+)+(/\S*)?$", sval.strip()):
+                key = "url"     # unlabeled field that holds a website
+            elif f.get("type") == "CHECKBOXES" and val:
                 key = "challenge"
             else:
                 continue

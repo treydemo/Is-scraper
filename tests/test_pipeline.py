@@ -238,10 +238,13 @@ def test_tally_flatten():
         {"label": "Business Phone", "type": "INPUT_PHONE_NUMBER", "value": "+19725550000"},
         {"label": "Business Location", "type": "INPUT_TEXT", "value": "Dallas, Texas"},
         {"label": "Facebook Business Page URL", "type": "INPUT_URL", "value": "https://facebook.com/x"},
+        {"label": "YouTube Channel (optional)", "type": "INPUT_TEXT", "value": "https://youtube.com/@x"},
+        {"label": "What is you biggest marketing challenge? (Not showing up on google)", "type": "CHECKBOXES", "value": True},
         {"label": "What is you biggest marketing challenge?", "type": "MULTIPLE_CHOICE", "value": ["o1"],
          "options": [{"id": "o1", "text": "Not showing up on google"}]}]},
         "callback_url": "https://hook.make.com/abc"}
     out = _flatten(body)
     assert out["url"] == "https://x.com" and out["facebook_url"] == "https://facebook.com/x"
+    assert out["youtube_url"] == "https://youtube.com/@x"
     assert out["contact_name"] == "Bob Smith" and out["email"] == "bob@x.com"
     assert out["challenge"] == "Not showing up on google" and out["callback_url"].startswith("https://hook")
