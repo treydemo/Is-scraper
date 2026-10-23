@@ -22,6 +22,10 @@ from .fetch import normalize_url
 from .report import render
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+# httpx logs full request URLs at INFO, and Google APIs take the key as a ?key= query param,
+# which put GOOGLE_API_KEY in plain text in the Railway logs. Keep httpx/httpcore at WARNING.
+for _noisy in ("httpx", "httpcore"):
+    logging.getLogger(_noisy).setLevel(logging.WARNING)
 app = FastAPI(title="IA Website Intelligence Engine", version=config.VERSION)
 
 
